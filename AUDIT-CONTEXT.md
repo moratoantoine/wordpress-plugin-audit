@@ -1,34 +1,27 @@
 # 📋 CONTEXTE PROJET — Audit WordPress (STRATÉGIE v2)
 
 ## 🎯 Stratégie v2
-Unauth/Subscriber dans catégories Wordfence payables uniquement (RCE, File Upload, Priv Esc, SQLi, Auth Bypass, Stored XSS, File Read). OUT : admin, enum seule, SSRF admin, disclosure seule.
+Unauth/Subscriber dans catégories Wordfence payables uniquement (RCE, Arbitrary File Upload, Priv Esc, SQLi, Auth Bypass, Stored XSS, Sensitive Info Disclosure exploitable). OUT : admin-required, enumeration seule.
 
-## ✅ FINDINGS RETENUS (2)
-1. UR ≤ 5.2.8 mail logs (CWE-538, Unauth) — Wordfence — reports/user-registration/ + vidéo poc-1
-2. UM ≤ 2.14.0 IP ban bypass (CWE-348, Unauth) — Wordfence — reports/ultimate-member/ + vidéo poc-2
+## ✅ FINDINGS RETENUS (3)
 
-## 🔍 SESSION 21 — NINJA FORMS REST (dernière surface round 2) — REFERMÉE
-- **nf-be-data/store** (Telemetry) : à re-vérifier mais mineur
-- **Token views Ninja** : système solide — secret 128 hex random, rotation 90j, HMAC-SHA256, hash_equals, expiration 15 min, formIds signés, rate limiter 60/min, MAX_TOKEN_LENGTH anti-DoS, validateSignatureOnly séparé
-- **Accès croisé testé dynamiquement** : token du form public 9 → form secret 16 = **401 bloqué** (le check in_array(formId, token.formIds) tient)
-- **Route forms (collection)** : filtrée par formIds du token (pas d'énumération des forms)
-- **Bloc submissions-table public** : testé de bout en bout (page publique → token public dans le HTML → REST → 3 soumissions d'autres utilisateurs lues) MAIS **by-design** : c'est la fonction même du bloc que l'admin insère volontairement (modèle sécurité Issue #8013 : filtre allowed_block_types_all + strip content_save_pre + capability pour les drafts — triple défense documentée dans le code)
-- **Submissions format NF3** reconstitué (nf_sub posts + _form_id + _seq_num + _field_N) — get_subs() fonctionnel
+### 1. User Registration ≤ 5.2.8 — Info Disclosure mail logs (CWE-538, Unauth) — Wordfence
+reports/user-registration/wordfence-report-info-disclosure-mail-logs.md + PoC + vidéo poc-1
 
-## 🏁 CONCLUSION DE LA CHASSE STRATÉGIE v2 (sessions 20-21)
-Toutes les surfaces Unauth/Subscriber des 10 plugins sont épuisées :
-- Round 1 (5 plugins) : sessions 1-17, tout couvert
-- Round 2 (5 plugins) : upload WJM (MIME strict), priv esc Fluent (Pro only), XSS Fluent (rendu React), REST unauth DM (search by-design, validate-password hash_equals, captcha nonce), REST WJM (nonces aléatoires + gates re-assertées), SQLi 10 plugins (0 hit réel), Ninja REST (token system solide, cross-form bloqué, bloc by-design)
+### 2. Ultimate Member ≤ 2.14.0 — IP Ban Bypass X-Forwarded-For (CWE-348, Unauth) — Wordfence
+reports/ultimate-member/wordfence-report-ip-ban-bypass.md + PoC + vidéo poc-2
 
-**Résultat : les 2 findings retenus restent les seuls soumettables Wordfence.** Les 10 plugins sont des versions récentes durcies par des audits antérieurs. Le pattern du projet : les failles restantes sont by-design (bloc public Ninja) ou config-conditionnelles (option admin).
+### 3. Download Manager ≤ 3.3.72 — Accès direct aux fichiers de packages (CWE-538/284, Unauth) — Wordfence 🆕 SESSION 22
+- Les fichiers de packages (password/role-locked) sont stockés dans uploads/download-manager-files/ avec leur NOM ORIGINAL (Packages.php:206)
+- Seule protection : .htaccess Deny from all (Apache-ONLY) + index.php vide (anti-listing du fix CVE-2024-13126/3.3.07)
+- Sur nginx/LiteSpeed/IIS : accès direct par nom devinable → 200 + contenu complet, CONTOURNE password/role/lock/masterkey (toutes les protections du flux ?wpdmdl)
+- Testé dynamiquement : endpoint protégé = "You don't have permission" ✅ / URL directe = 200 + FUITE ✅ / listing = bloqué par index.php ✅
+- DISTINCT du CVE-2024-13126 (listing vs accès direct par nom) — le fix index.php ne couvre PAS ce vecteur
+- Rapport : reports/download-manager/wordfence-report-direct-file-access-bypass.md + PoC exploit-direct-file-access.sh
+- → Wordfence (Unauth Sensitive Info Disclosure avec bypass complet des protections du plugin)
 
-## 💡 Si nouvelle session
-1. Vérifier nf-be-data/store (Telemetry NF — dernière route non testée)
-2. Test bruteforce du token Ninja (rate limiter 60/min permet-il assez de requêtes ?)
-3. Nouveaux plugins si ajoutés au repo
-
-## ⚙️ ENVIRONNEMENTS
-wp1 multisite port 80 · wp2 single-site port 8082 (admin/adminPass123!, 5 plugins round 2 actifs, NF form 9 avec 3 subs + form secret 16 + page 14 avec bloc)
+## 🔍 SESSIONS 20-22 — couverture complète des 10 plugins
+Telemetry NF (manage_options ✅) · shortcodes round 2 (wpdm_direct_link vérifie isLocked ✅) · device ID DM (random_bytes 16 ✅) · keys DM (wp_generate_password 32 + stores multiples ✅) · ?wpdmdl handler (masterkey/key/lock/role checks ✅) · DM uploads dir = FINDING #6 ✅ · fichiers logs round 2 (aucun public)
 
 ## 📤 LIVRAISON
-Branche vibe/dynamic-audit-findings — 2 rapports Wordfence + PoC + vidéos + env + contexte
+Branche vibe/dynamic-audit-findings — 3 rapports Wordfence + PoC + 2 vidéos + env reproductibles + contexte
