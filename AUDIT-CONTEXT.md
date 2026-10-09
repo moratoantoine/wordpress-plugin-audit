@@ -1,21 +1,48 @@
-# 📋 CONTEXTE PROJET — Audit plugins WordPress (sessions 1-18)
+# 📋 CONTEXTE PROJET — Audit plugins WordPress (sessions 1-19, ROUND 2 en cours)
 
-## ✅ FINDINGS (4) + TRIAGE PROGRAMME
-1. **UR mail logs (CWE-538, Unauth)** — Wordfence bounty ✅ | reports/user-registration/wordfence-report-info-disclosure-mail-logs.md
-2. **UM IP ban bypass (CWE-348, Unauth)** — Wordfence borderline / WPScan backup | reports/ultimate-member/wordfence-report-ip-ban-bypass.md
-3. **WPvivid SSRF (CWE-918, Admin)** — WPScan | reports/wpvivid-backup-plugin/wordfence-report-ssrf-test-remote-connection.md
-4. **WPFM upload RCE fail-open (CWE-434, Admin)** — WPScan | reports/wp-file-manager/wordfence-report-upload-rce-fail-open-mime.md
-Règle Wordfence vérifiée : admin-required = pas de bounty → #3/#4 chez WPScan. SUBMISSIONS-README.md = guide complet de triage + checklist.
+## ✅ FINDINGS ROUND 1 (4) — triage fait (voir SUBMISSIONS-README.md)
+1. UR mail logs (CWE-538, Unauth) — Wordfence ✅
+2. UM IP ban bypass (CWE-348, Unauth) — Wordfence borderline / WPScan
+3. WPvivid SSRF (CWE-918, Admin) — WPScan
+4. WPFM upload RCE fail-open (CWE-434, Admin) — WPScan
++ 4 vidéos PoC MP4 poussées (poc-videos/)
 
-## 📹 SESSION 18 — VIDÉOS POC (exigence Wordfence) ✅
-**Playwright opérationnel dans le sandbox** (Node 22 + chromium-1248 ; ~25 libs système extraites en user-space depuis les pools Debian — pattern identique à PHP/MariaDB portables : libglib, nss, atk, x11, xcb, gbm, xkbcommon, pango, cairo, alsa(bookworm pour GLIBC compat), wayland... via /tmp/fix-libs2.sh + /tmp/fetch-deb.py ; LD_LIBRARY_PATH=/tmp/chromium-libs/usr/lib/x86_64-linux-gnu).
-**4 vidéos générées et converties en MP4 H.264 1920x1080** (36-41s) : poc-1-ur-mail-logs.mp4 (39s), poc-2-um-ip-ban-bypass.mp4 (37s), poc-3-wpvivid-ssrf.mp4 (38s), poc-4-wpfm-upload-rce.mp4 (41s). Structure Wordfence : titre→avant→exploitation live→impact→contrôle négatif. Conversion via ffmpeg statique 7.0.2 (johnvansickle — le ffmpeg playwright ne fait pas mp4, muxer webm only).
-**Livrables poussés** : poc-videos/{video-1..4}.js (générateurs reproductibles), package.json, run-all.sh, README.md (procédure complète) + SUBMISSIONS-README.md (guide de soumission par programme). Les MP4 binaires ne passent pas l'API texte — régénérables en 1 commande (`cd poc-videos && npm run all`), les copies locales sont dans /workspace/poc-videos/videos/*.mp4 et /workspace/github__moratoantoine__wordpress-plugin-audit/poc-videos/*.mp4.
+## 🆕 ROUND 2 — 5 NOUVEAUX PLUGINS (session 19 en cours)
+| Plugin | Version | Installs | Fichiers PHP |
+|---|---|---|---|
+| Download Manager | 3.3.72 | 100 000 | 199 |
+| Fluent Forms | 6.2.15 | 700 000 | 882 |
+| Ninja Forms | 3.15.5 | 500 000 | 412 |
+| WP All Import | 4.1.3 | 100 000 | 1121 |
+| WP Job Manager | 2.4.8 | 70 000 | 301 |
+Toutes versions = dernières publiées wordpress.org (vérifié). Tous ≥ 50k installs = in-scope Wordfence.
+
+### ✅ FINDING #5 (ROUND 2) — Download Manager ≤ 3.3.72 — User/Email Enumeration Unauth
+- resetPassword nopriv (src/User/Login.php:221) : réponses DISTINCTES ok/error selon existence du compte (username ET email)
+- Throttle 60s contournable : lié au cookie __wpdm_client (sans cookie = jamais throttlé) + email-bombing (reset key envoyé à chaque ok)
+- Testé dynamiquement : admin→ok, nobody→error, email ok/error — diverge du core WP (réponse générique)
+- CVE-2026-2571 = DISTINCT (Subscriber+ via param user, patché 3.3.50) ; le nôtre = Unauth via resetPassword, version courante
+- Rapport : reports/download-manager/wordfence-report-user-enumeration-resetpassword.md + PoC poussés
+
+### 🔍 ROUND 2 — couverture en cours
+- download-manager : nopriv balayés (media_pass durci avec nonce+strict compare, updatePassword très durci : reset key + nonce spécifique + blocage admin), Crypt AES/HMAC solide, REST wpdm à vérifier — user ENUM trouvé ✅
+- wp-job-manager : upload_file nopriv exige login (config-conditionnel : option user_requires_account décochée = upload possible unauth — BORDERLINE), get_listings ok, log_stat ok
+- ninja-forms : get_new_nonce public by-design (form), resume = session-based propre, nf_log_js_error 403 ✅, REST nf-be-data/submissions/views à auditer
+- wp-all-import : 0 nopriv, auto_detect_cf nonce+cap ✅, REST addon fields = cap ✅, uploads wpallimport/files/ SANS .htaccess (index.php vide only) — accès direct 200 confirmé sur fichier posé à la main MAIS défaut secure=1 = dossier md5(importID+NONCE_SALT) → attaque conditionnelle (option admin décochée ou imports pré-option) → BORDERLINE noté
+- fluentform : submit nopriv by-design, generate_protection_token 400 (params requis), upload intégré au flux de soumission — creuser les entries/XSS côté admin (pattern Forminator)
 
 ## ⚙️ ENVIRONNEMENTS
-Single-site 127.0.0.1:8080 (setup-dynamic-env.sh) + Multisite port 80 router.php (setup-multisite-env.sh, /site2/, subadmin). Comptes : admin/adminPass123!, testsubscriber/subPass123!, subadmin/SubAdmin123!. Vidéo 2 : réactiver blocked_ips=127.0.0.1 avant, retirer après (faits).
+- wp1 : multisite port 80 (round 1, 5 plugins round-1 actifs)
+- **wp2 : single-site port 8082, WP 6.7.1, admin/adminPass123!, les 5 NOUVEAUX plugins actifs** — instance dédiée round 2
 
-## ❌ 13 FINDINGS D'ORIGINE RÉFUTÉS — reports/BILAN-verification-dynamique.md
+## 💡 PISTES ROUND 2 (suite)
+1. Ninja Forms REST (nf-be-data, submissions, views) : permission callbacks ?
+2. Fluent Forms : rendu des entries admin (XSS pattern Forminator) + composants de paiement
+3. WP Job Manager : la chaîne config-conditionnelle (option décochée → upload unauth → RCE si mime faible ?)
+4. Download Manager REST wpdm/v1 : endpoints
+5. WPAI history/ : les logs d'import (données) sont-ils sous le même schéma md5 ou plats ?
 
-## 🏁 ÉTAT FINAL
-Audit complet (17 sessions d'audit + 1 session vidéos). 4 rapports Wordfence complets + 4 PoC bash + 4 vidéos MP4 + contrôles négatifs + 2 env reproductibles + guide de soumission. **PRÊT À SOUMETTRE : #1/#2 → Wordfence (bugcrowd.wordfence.com), #3/#4 → WPScan.**
+## ❌ 13 FINDINGS ROUND 1 RÉFUTÉS — reports/BILAN-verification-dynamique.md
+
+## 📤 LIVRAISON
+Branche vibe/dynamic-audit-findings — 5 rapports + 5 PoC + 4 vidéos + env + contexte
