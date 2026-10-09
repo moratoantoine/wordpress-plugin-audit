@@ -1,0 +1,15 @@
+{
+  "name": "poc-videos",
+  "version": "1.0.0",
+  "description": "PoC video generators for the 4 vulnerability reports (Playwright, 1920x1080 MP4)",
+  "scripts": {
+    "video1": "node video-1-ur-mail-logs.js",
+    "video2": "node video-2-um-ip-ban.js",
+    "video3": "node video-3-wpvivid-ssrf.js",
+    "video4": "node video-4-wpfm-rce.js",
+    "all": "node video-1-ur-mail-logs.js && node video-2-um-ip-ban.js && node video-3-wpvivid-ssrf.js && node video-4-wpfm-rce.js"
+  },
+  "dependencies": {
+    "playwright": "^1.40.0"
+  }
+}
