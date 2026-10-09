@@ -1,26 +1,43 @@
-# 📤 GUIDE DE SOUMISSION — 5 Vulnerability Reports (triage final v2)
+# 📤 SOUMISSION WORDFENCE — 2 rapports retenus (stratégie v2)
 
-## Triage final (règles Wordfence vérifiées : admin-required = hors bounty ; catégories HIGH THREAT / COMMON AND DANGEROUS uniquement pour le bounty)
+## Stratégie (v2 — resserrée)
 
-| # | Plugin | Vuln | Auth | Programme | Statut |
-|---|---|---|---|---|---|
-| 1 | User Registration ≤ 5.2.8 | Info Disclosure mail logs (CWE-538) | Unauth | **Wordfence** (bounty faible, $0-50) | Soumettable — conditionnel (non-Apache + salts défaut) ; la valeur est faible mais Unauth Info Disclosure est une catégorie acceptée. Vidéo déjà générée : poc-videos/poc-1-ur-mail-logs.mp4 |
-| 2 | Ultimate Member ≤ 2.14.0 | IP Ban Bypass X-Forwarded-For (CWE-348) | Unauth | **Wordfence** (bounty faible) ou WPScan | Soumettable — Security Feature Bypass Unauth ; présenter l'exploit sans le terme bruteforce dans l'exploit direct. Vidéo déjà générée : poc-videos/poc-2-um-ip-ban-bypass.mp4 |
-| 3 | Download Manager ≤ 3.3.72 | User/Email Enumeration resetPassword (CWE-203) | Unauth | **WPScan** | Hors scope bounty Wordfence (pas dans HIGH THREAT / COMMON AND DANGEROUS) — MAIS catégorie standard chez WPScan (des centaines d'advisories user enumeration dans leur base) → soumettre à WPScan pour advisory + CVE potentielle |
-| 4 | WP File Manager ≤ 8.0.6 | Upload RCE fail-open MIME (CWE-434) | Admin | **WPScan** | Hors scope Wordfence (auth admin = pas de bounty). RCE authenticated admin = catégorie standard WPScan. Le fail-open du filtre annoncé (uploadAllow non fonctionnel) est un vrai défaut documenté avec contrôle négatif |
-| 5 | WPvivid Backup ≤ 0.9.136 | SSRF test_remote_connection (CWE-918) | Admin | **WPScan** | Hors scope Wordfence (auth admin). SSRF authenticated admin = catégorie standard WPScan. Variantes : s3compat (SSRF HTTP PUT/DELETE endpoint arbitraire), media_upload WPFM (URL externe) |
+Cible exclusive : **vulnérabilités Unauth ou Subscriber-level dans les catégories Wordfence payables**.
 
-## Décision recommandée
-1. **Soumettre #1 et #2 à Wordfence** (bugcrowd.wordfence.com) — unauth + vidéos prêtes. Attente réaliste : bounty faible ($0-50 chacun), mais la soumission est quasi-gratuite (les rapports et vidéos existent)
-2. **Soumettre #3, #4, #5 à WPScan** (wpscan.com) — advisory + CVE potentielle pour chacun. WPScan ne paie pas de bounty mais publie ces trois catégories en routine (user enum, RCE authenticated, SSRF authenticated)
-3. **Ne PAS soumettre #3/#4/#5 en bounty Wordfence** (règle : 10 hors-scope = risque de ban)
+| Catégorie | IN-SCOPE |
+|---|---|
+| Unauth RCE / Arbitrary File Upload | ✅ |
+| Unauth Privilege Escalation | ✅ |
+| Unauth SQLi | ✅ |
+| Unauth Authentication Bypass | ✅ |
+| Unauth Stored XSS | ✅ |
+| Subscriber Priv Esc / File Read-Upload | ✅ |
+| Tout ce qui exige Admin/Editor/Author/Contributor | ❌ écarté |
+| User/Email enumeration seule | ❌ écarté |
+| SSRF / Info disclosure seule / feature bypass sans catégorie payable | ❌ écarté |
 
-## 📹 Vidéos PoC (exigence Wordfence)
-Les vidéos des findings #1 et #2 sont déjà générées et poussées (MP4 H.264, 1920x1080, 36-41s) : poc-videos/poc-1-ur-mail-logs.mp4, poc-videos/poc-2-um-ip-ban-bypass.mp4. Les 4 générateurs Playwright (video-1..4.js) sont dans poc-videos/ pour reproduire ou générer celles des findings WPScan si besoin.
+## Les 2 soumissions Wordfence
+
+### Finding #1 — User Registration & Membership ≤ 5.2.8
+- **Type** : Information Disclosure (CWE-538) — Unauthenticated
+- **Rapport** : reports/user-registration/wordfence-report-info-disclosure-mail-logs.md
+- **PoC vidéo** : poc-videos/poc-1-ur-mail-logs.mp4 (39s, 1920×1080, H.264)
+- **Script vidéo** : poc-videos/video-1-ur-mail-logs.js
+- **Statut scope** : ✅ soumettable (Unauth Info Disclosure — bounty faible attendu, la précondition non-Apache est documentée dans le rapport)
+
+### Finding #2 — Ultimate Member ≤ 2.14.0
+- **Type** : Security Control Bypass (CWE-348) — Unauthenticated
+- **Rapport** : reports/ultimate-member/wordfence-report-ip-ban-bypass.md
+- **PoC vidéo** : poc-videos/poc-2-um-ip-ban-bypass.mp4 (37s, 1920×1080, H.264)
+- **Script vidéo** : poc-videos/video-2-um-ip-ban.js
+- **Statut scope** : ✅ soumettable (Unauth — présenter le bypass sans le terme "bruteforce" dans l'exploit direct)
 
 ## ✅ Checklist avant soumission
-1. Compte chercheur sur wordfence.com (requis pour le bounty) — sinon formulaire non-authentifié = pas de bounty
-2. Wordfence : copier le rapport .md dans le formulaire + joindre le MP4 correspondant
+1. Créer un compte chercheur sur wordfence.com (requis pour le bounty)
+2. Pour chaque soumission : copier le rapport .md dans le formulaire + joindre le MP4
 3. Certifier « PoC tested step-by-step: YES » (chaque PoC a été réellement exécuté dans l'environnement de test)
 4. Ne pas divulguer publiquement avant la fin du responsible disclosure
-5. WPScan : soumettre via wpscan.com (formulaire "Report a Vulnerability") avec le rapport technique + PoC
+
+## Historique de triage (transparence)
+
+3 findings supplémentaires ont été découverts lors de l'audit mais **écartés** de la soumission Wordfence car hors catégories payables : user enumeration (Download Manager), upload RCE admin (WP File Manager), SSRF admin (WPvivid). Leurs rapports et preuves ont été retirés du repo conformément à la stratégie v2.

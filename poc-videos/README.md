@@ -35,7 +35,5 @@ Chromium exige des libs système ; si `launch()` échoue avec `loading shared li
 ## Correspondance vidéos ↔ rapports
 | Vidéo | Finding | Rapport | Programme |
 |---|---|---|---|
-| video-1 → poc-1-ur-mail-logs.mp4 | #1 UR mail logs (Unauth) | reports/user-registration/ | Wordfence bounty |
-| video-2 → poc-2-um-ip-ban-bypass.mp4 | #2 UM IP ban bypass (Unauth) | reports/ultimate-member/ | Wordfence (borderline) / WPScan |
-| video-3 → poc-3-wpvivid-ssrf.mp4 | #3 WPvivid SSRF (admin) | reports/wpvivid-backup-plugin/ | WPScan |
-| video-4 → poc-4-wpfm-upload-rce.mp4 | #4 WPFM upload RCE (admin) | reports/wp-file-manager/ | WPScan |
+| video-1 → poc-1-ur-mail-logs.mp4 | #1 UR mail logs (Unauth) | reports/user-registration/ | Wordfence |
+| video-2 → poc-2-um-ip-ban-bypass.mp4 | #2 UM IP ban bypass (Unauth) | reports/ultimate-member/ | Wordfence |

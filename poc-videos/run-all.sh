@@ -3,7 +3,7 @@
 export LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-/tmp/chromium-libs/usr/lib/x86_64-linux-gnu}
 cd "$(dirname "$0")"
 mkdir -p videos
-for v in video-1-ur-mail-logs video-2-um-ip-ban video-3-wpvivid-ssrf video-4-wpfm-rce; do
+for v in video-1-ur-mail-logs video-2-um-ip-ban; do
   echo "=== $v ==="
   timeout 300 node $v.js 2>&1 | tail -2
 done
