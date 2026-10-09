@@ -1,33 +1,29 @@
 # 📋 CONTEXTE PROJET — Audit plugins WordPress (pour les prochaines sessions)
 
 ## ✅ FINDINGS CONFIRMÉS (4, soumettables Wordfence)
-1. **UR ≤ 5.2.8 — Info Disclosure ur_mail_logs (CWE-538, Unauth)** → reports/user-registration/wordfence-report-info-disclosure-mail-logs.md
-2. **UM ≤ 2.14.0 — IP Ban Bypass X-Forwarded-For (CWE-348, Unauth)** → reports/ultimate-member/wordfence-report-ip-ban-bypass.md
+1. **UR ≤ 5.2.8 — Info Disclosure ur_mail_logs (CWE-538, Unauth)** → reports/user-registration/wordfence-report-info-disclosure-mail-logs.md — emails/sujets PII, PAS de clés de reset (vérifié session 13 : le body avec {{key}} n'est jamais loggé, seulement to/subject)
+2. **UM ≤ 2.14.0 — IP Ban Bypass X-Forwarded-For (CWE-348, Unauth)** → reports/ultimate-member/wordfence-report-ip-ban-bypass.md — RENFORCEMENT session 13 : UM n'a AUCUN lockout/throttle natif sur le login → chaîne complète ban-bypass + bruteforce illimité (documenter comme aggravation du rapport)
 3. **WPvivid ≤ 0.9.136 — SSRF via test_remote_connection (CWE-918, admin/site)** → reports/wpvivid-backup-plugin/wordfence-report-ssrf-test-remote-connection.md (variante s3compat)
-4. **WPFM ≤ 8.0.6 — Upload RCE fail-open MIME (CWE-434, admin) 🆕 SESSION 12** → reports/wp-file-manager/wordfence-report-upload-rce-fail-open-mime.md
-   - uploadAllow: image,text/plain est NON-FONCTIONNEL : uploadDeny VIDE + uploadOrder (deny,allow) = logique Apache Order → défaut ALLOW pour TOUT MIME
-   - Prouvé dynamiquement : shell.php uploadé à la RACINE ABSPATH via le connecteur elFinder (nonce + session admin légitimes), **EXÉCUTÉ** (PWNED), puis nettoyé
-   - Contrôle négatif : les 2 remédiations (deny peuplé OU order allow-deny) rejettent text/x-php — seule la config livrée fail-open
-   - Angle trouvé par : correction de l'artefact multisite (siteurl DB corrompu réparé) → fuzz elFinder HTTP complet → uploadAllow annoncé ne filtre rien
+4. **WPFM ≤ 8.0.6 — Upload RCE fail-open MIME (CWE-434, admin)** → reports/wp-file-manager/wordfence-report-upload-rce-fail-open-mime.md — RENFORCEMENT session 13 : les ZIP passent aussi (application/zip accepté) ; seule l'EXTRACTION est contrôlée
 
-## ⚙️ ENVIRONNEMENTS (scripts/setup-dynamic-env.sh + setup-multisite-env.sh)
-Single-site: 127.0.0.1:8080. Multisite: port 80 + router.php, /site2/, subadmin admin blog 2. **FIX session 12** : le siteurl DB avait été corrompu (http:///wordpress) par les tests CLI — corrigé en http://127.0.0.1 → les pages admin (ajaxurl/fmfparams) fonctionnent, elFinder opérationnel (root hash l1_Lw).
-⚠️ Ne PAS laisser un wp-config avec WP_HOME en port 8080 en multisite ; le siteurl/home vient de la DB.
+## ⚙️ ENVIRONNEMENTS
+Single-site 127.0.0.1:8080 + Multisite port 80 router.php (/site2/, subadmin). ⚠️ Ne jamais laisser WP_HOME en port 8080 en multisite (siteurl = DB). elFinder opérationnel : root hash l1_Lw, nonce = fmfparams.nonce de la page admin, Referer same-origin requis.
 
-## 🔍 SESSION 12 — LE FUZZ ELFINDER A PORTÉ
-- Artefact corrigé (WP_HOME retiré + siteurl DB réparé) → connecteur elFinder pleinement opérationnel en HTTP
-- Tests : open racine (l1_Lw) OK, upload shell.php → **ACCEPTÉ** (mime text/x-php passé !), upload .txt OK, exécution du shell → RCE prouvé, nettoyage
-- Racine : allowPutMime (elFinderVolumeDriver:4494) = Order deny,allow avec deny vide → default ALLOW. Le uploadAllow n'est consulté que pour surcharger un deny — inutile si deny vide
-- Contexte d'attaque honnête : admin single-site (manage_options) ou super admin multisite (manage_network) ; le filtre annoncé par le plugin ne fonctionne pas = fail-open réel, exploitable via accès étendu (feature PRO « give access to user roles ») ou toute vuln secondaire
+## 🔗 SESSION 13 — CHAÎNES D'ATTAQUE (5 explorées)
+1. **Shortcode WPFM frontend → RCE low-priv** : shortcode = feature PRO seulement (free l'admin seul) → chaîne NON applicable au free, refermée
+2. **IP ban bypass + bruteforce** : UM n'a AUCUN lockout natif (wp_login_failed hook delegate aux plugins tiers, aucune limite interne) → le finding #2 devient une CHAÎNE : banni + XFF spoof = ban bypassé + attempts illimitées sur le form login UM → à ajouter comme aggravation au rapport #2
+3. **Zip Slip via elFinder extract** : testé dynamiquement avec zip contenant ../../evil.txt → extraction en QUARANTAINE + nettoyage des chemins : les fichiers traversal atterrissent DANS la racine (pas dehors), le second rejeté → elFinder défendu, refermé. NB: l'upload du zip lui-même passe le fail-open MIME (renforce #4)
+4. **public_path admin (Preference)** : soudé à ABSPATH + strip ../ → pas de montage de dirs arbitraires, refermé
+5. **Reset-password key → log public (chaîne critique potentielle du finding #1)** : lost_password_email passe bien par process_and_send_email (le flux loggé) MAIS le log ne contient JAMAIS le body (seulement to/subject/template_id dans « Email details », et to/subject/headers/attachments dans wp_mail_failed) → la clé de reset n'atteint PAS le log → finding #1 reste PII disclosure (emails + sujets), PAS account takeover → intégrité du rapport #1 préservée
 
 ## ❌ 13 FINDINGS D'ORIGINE RÉFUTÉS — reports/BILAN-verification-dynamique.md
 
-## 🏁 ÉTAT (sessions 1-12)
-4 findings soumettables (2 Unauth, 1 SSRF admin, 1 RCE admin fail-open) + PoC + contrôles négatifs. 5 plugins couverture PROFONDE. ~50 surfaces refermées. Le pattern récurrent du projet : **les défauts restants sont des fail-open de contrôles annoncés** (logs « protégés » par .htaccess Apache-only, IP ban basé sur headers, allow-list sans effet).
+## 🏁 ÉTAT (sessions 1-13)
+4 findings soumettables + aggravations en chaîne documentées (#2 bruteforce illimité, #4 zips). Pattern du projet : fail-open de contrôles annoncés. Les 3 rapports « aggravés » à mettre à jour avant soumission : #2 (chaîne bruteforce), #1 (précision pas-de-clés), #4 (zip aussi).
 
-## 💡 PISTES SESSION 13+
-1. Vérifier si d'autres volumes elFinder de WPFM (Trash t1_Lw, ou la config public_path admin) permettent des écritures hors racine avec le même fail-open
-2. re-vérifier les 4 findings à chaque nouvelle version
+## 💡 PISTES SESSION 14+
+1. Mettre à jour les 3 rapports avec les aggravations de chaîne de la session 13
+2. Autres chaînes : XSS stocké UM display_name (session 2 : sanitize à l'entrée mais si un ADMIN édite un profil avec display_name HTML via wp-admin ?) → tester si user-edit admin bypass le sanitize UM
 
 ## 📤 LIVRAISON
-Branche vibe/dynamic-audit-findings — 4 rapports Wordfence PRÊTS À SOUMETTRE + PoC + env reproductibles
+Branche vibe/dynamic-audit-findings — 4 rapports + PoC + env reproductibles + ce contexte
