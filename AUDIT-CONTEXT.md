@@ -1,56 +1,35 @@
-# 📋 CONTEXTE PROJET — Audit WordPress (STRATÉGIE v4 — scope officiel Wordfence)
+# 📋 CONTEXTE PROJET — Audit WordPress (STRATÉGIE v4, session 24)
 
-## 🎯 GRILLE DE CHASSE v4 (basée sur le scope officiel fourni)
+## 🎯 Stratégie v4 — grille High Threat Wordfence uniquement (voir REFERENCE.md pour la grille complète)
+Rappel : ne chasser que Arbitrary PHP File Upload/Read/Deletion, Options Update, RCE, Auth Bypass to Admin, Priv Esc to Admin (>= 25 installs) ; Stored XSS applicatif + SQLi (>= 500) — le tout Unauth/Subscriber. OUT définitif : .htaccess/host-config, IP spoofing, SSRF, enumeration, PR:H, reflected XSS, CSRF, DoS.
 
-### CIBLES IN-SCOPE EXCLUSIFS (High Threat = >= 25 installs ; Common = >= 500 ; Autre = >= 50 000 pour tier standard)
-| # | Vulnérabilité | Seuil installs | Nos plugins éligibles (tous >= 50k sauf WPAI/WJM = 100k/70k)
-|---|---|---|---|
-| 1 | Arbitrary PHP File Upload or Read | >= 25 | TOUS |
-| 2 | Arbitrary PHP File Deletion | >= 25 | TOUS |
-| 3 | Arbitrary Options Update | >= 25 | TOUS |
-| 4 | Remote Code Execution | >= 25 | TOUS |
-| 5 | Authentication Bypass to Admin | >= 25 | TOUS |
-| 6 | Privilege Escalation to Admin | >= 25 | TOUS |
-| 7 | Stored XSS (rendu à d'autres via flux applicatif) | >= 500 | Fluent 700k, NF 500k, Ninja… |
-| 8 | SQL Injection | >= 500 | Fluent 700k, NF 500k |
-| 9 | LFI/RFI, Directory Traversal, Arbitrary File Download/Read | >= 50k | Fluent, NF, DM, WPAI, WJM |
-| 10 | Priv Esc / Auth Bypass to Non-Admin | >= 50k | idem |
-| 11 | Sensitive Info Disclosure (NON « Basic Info Exposure ») | >= 50k | idem |
-| 12 | PHP Object Injection AVEC gadget | >= 50k | idem |
+## ✅ FINDINGS 1-6 : statut inchangé — tous hors scope Wordfence (rejet DM confirmé), redirigés Patchstack/WPScan
 
-### OUT-OF-SCOPE EXPLICITES (à ne JAMAIS rapporter — leçons des rejets)
-- .htaccess/nginx/host-config (confirmé par rejet DM) — TOUTE la famille « où sont les données physiquement » est morte
-- **IP Spoofing** (= liste Common False Positives) → le finding UM #2 est probablement OUT
-- SSRF (toutes catégories) → WPvivid SSRF était OUT
-- User/Email enumeration (False Positive list) → DM enum était OUT
-- Reflected XSS, CSRF, DoS, cache poisoning, open redirect
-- Uploads dans uploads/ sans « site compromise »
-- PHP Object Injection sans gadget exploitable
-- Tout PR:H (admin/editor/shop manager/unfiltered_html)
-- Tout mid-level (Contributor/Author)
+## 🔍 SESSION 24 — chasse High Threat (6 cibles majeures, toutes refermées avec preuves)
+1. **DM showLockOptions** (nopriv jamais testé) : downloadLink HTML du form lock, by-design
+2. **Options Update Subscriber** (scan 4 plugins round 2) : 0 hit — tous les update_option sont des writes internes (migrations/cron)
+3. **PHP Object Injection** Fluent/NF : tous unserialize avec allowed_classes:false
+4. **wpdm_category shortcode XSS** : packages créés par Author+ seulement (mid-level = hors scope)
+5. **WJM submit-job complet (flux public majeur)** :
+   - Soumission visiteur OK (nonce skipé pour non-connectés) ; job créé status preview (approval=1 par défaut)
+   - XSS titre/description : kses WP strippé event handlers (onerror) ; <img src=x> sans handler autorisé (inoffensif, testé)
+   - Metas company/application : esc_attr + wp_strip_all_tags + wp_kses_post (triple échappement, testé avec payloads)
+   - IDOR job_id d'autrui : job_manager_user_can_edit_job → visitor=false → job_id réinitialisé (testé dynamiquement avec job preview d'un user A édité par visiteur B : job de A INTACT)
+   - upload file : whitelist MIME stricte (s20)
+6. **Fluent 16 handlers wp_ajax_ subscriber-tier** : tous derrière Acl::verify — subscriber → getCurrentUserCapability=false → refusé (testé dynamiquement) ; payments/install/migrate/ai tous Acl-gated
 
-## ✅ BILAN DES FINDINGS EXISTANTS vs v4
-| Finding | Verdict v4 |
-|---|---|
-| UR mail logs | ❌ OUT (uploads dir sans site compromise + .htaccess) |
-| UM IP ban bypass | ❌ OUT probable (IP Spoofing = False Positive) |
-| DM direct file access | ❌ REJETÉ (confirmé) |
-| NF export CSV | ❌ OUT (même pattern) |
-| WPvivid SSRF | ❌ OUT (SSRF explicite) |
-| WPFM RCE admin | ❌ OUT (PR:H) |
+## 📊 Vérité statistique du projet (24 sessions)
+Ces 10 plugins (versions récentes, massivement audités publiquement) sont extrêmement durcis sur les surfaces High Threat classiques. Les 6 findings trouvés étaient tous dans des catégories OUT du scope Wordfence (host-config, spoofing, SSRF, PR:H). La rareté d'un finding High Threat in-scope sur ce corpus est élevée — chaque session de chasse supplémentaire a un rendement marginal décroissant.
 
-**Aucun finding actuel n'est soumettable Wordfence sous la grille v4.** Les 6 rapports restent valides pour Patchstack/WPScan (grilles différentes).
-
-## 🆕 CHASSE v4 — angles applicatifs purs sur les 10 plugins
-1. **Arbitrary Options Update** : chercher update_option() reachable par Subscriber (settings non protégées)
-2. **Priv Esc via rôle** : formulaires d'inscription publics avec champ role exploitable (attention : injection de role déjà testée UR — résistée — à étendre aux 9 autres)
-3. **Stored XSS applicatif** : données utilisateur rendues dans du HTML côté serveur (pas React/JS) chez Fluent/NF/DM
-4. **PHP File Read** : file_get_contents/readfile avec paramètre contrôlable Subscriber (pas admin)
-5. **PHP Object Injection avec gadget** : unserialize() sur données contrôlables + classes du plugin en gadget (pas seulement allowed_classes=false)
-6. **Auth Bypass** : flux de login custom (DM Login.php — déjà vu durci, mais re-vérifier les variantes)
+## 💡 Si session 25 : dernières pistes inexplorées
+1. Les ADD-ONS/PRO présents physiquement dans les zips free (fluentform/app/Modules/Payments/... : code Pro embarqué ? vérifier les gatekeepers Pro du free)
+2. Les intégrations Fluent (mailchimp_interest_groups, select_group_ajax_data : handlers intégrations tierces)
+3. WPAI (1121 fichiers, le moins couvert) : ses cron/import endpoints avec chemins de fichiers
+4. NF : les settings des champs stockés en nf3_field_meta avec unserialize (Model.php:344 allowed_classes:false — mais les gadgets de tableau ?)
+5. Les vieux handlers de round 1 jamais retracés en contexte subscriber (pas admin) — re-grille UM/UR handlers avec l'oeil High Threat v4
 
 ## ⚙️ ENVIRONNEMENTS
-wp1 multisite port 80 · wp2 single-site port 8082 (admin/adminPass123!, round 2 actifs)
+wp2 port 8082 OK (config WJM test soumission publique active : submit page 21, requires_approval=1) · wp1 port 80 OK
 
 ## 📤 LIVRAISON
-Branche vibe/dynamic-audit-findings — 6 rapports (tous redirigés Patchstack/WPScan) + PoC + vidéos + env
+Branche vibe/dynamic-audit-findings — 6 rapports + PoC + vidéos + REFERENCE.md (grille complète) + env
