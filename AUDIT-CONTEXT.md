@@ -1,38 +1,56 @@
-# 📋 CONTEXTE PROJET — Audit WordPress (STRATÉGIE v3 — post-rejet)
+# 📋 CONTEXTE PROJET — Audit WordPress (STRATÉGIE v4 — scope officiel Wordfence)
 
-## 🚨 LEÇON DU REJET (Finding DM « Content Disclosure (Private Content) » — Rejected, Oct 10 2026)
+## 🎯 GRILLE DE CHASSE v4 (basée sur le scope officiel fourni)
 
-Wordfence rejette le pattern **« .htaccess Apache-only + host-dependent (nginx) »** : ils le classent comme un problème de CONFIG SERVEUR, pas du plugin (le plugin a déployé une protection « raisonnable » avec .htaccess).
+### CIBLES IN-SCOPE EXCLUSIFS (High Threat = >= 25 installs ; Common = >= 500 ; Autre = >= 50 000 pour tier standard)
+| # | Vulnérabilité | Seuil installs | Nos plugins éligibles (tous >= 50k sauf WPAI/WJM = 100k/70k)
+|---|---|---|---|
+| 1 | Arbitrary PHP File Upload or Read | >= 25 | TOUS |
+| 2 | Arbitrary PHP File Deletion | >= 25 | TOUS |
+| 3 | Arbitrary Options Update | >= 25 | TOUS |
+| 4 | Remote Code Execution | >= 25 | TOUS |
+| 5 | Authentication Bypass to Admin | >= 25 | TOUS |
+| 6 | Privilege Escalation to Admin | >= 25 | TOUS |
+| 7 | Stored XSS (rendu à d'autres via flux applicatif) | >= 500 | Fluent 700k, NF 500k, Ninja… |
+| 8 | SQL Injection | >= 500 | Fluent 700k, NF 500k |
+| 9 | LFI/RFI, Directory Traversal, Arbitrary File Download/Read | >= 50k | Fluent, NF, DM, WPAI, WJM |
+| 10 | Priv Esc / Auth Bypass to Non-Admin | >= 50k | idem |
+| 11 | Sensitive Info Disclosure (NON « Basic Info Exposure ») | >= 50k | idem |
+| 12 | PHP Object Injection AVEC gadget | >= 50k | idem |
 
-### Règle de triage v3 (cumule v2)
-OUT (écartés d'office) :
-- Admin/Editor/Author/Contributor required
-- User/Email enumeration seule
-- SSRF admin
-- **🆕 Toute divulgation par fichier dans uploads/ protégé par .htaccess et dépendante du webserver (nginx)** — rejet confirmé par triage DM
+### OUT-OF-SCOPE EXPLICITES (à ne JAMAIS rapporter — leçons des rejets)
+- .htaccess/nginx/host-config (confirmé par rejet DM) — TOUTE la famille « où sont les données physiquement » est morte
+- **IP Spoofing** (= liste Common False Positives) → le finding UM #2 est probablement OUT
+- SSRF (toutes catégories) → WPvivid SSRF était OUT
+- User/Email enumeration (False Positive list) → DM enum était OUT
+- Reflected XSS, CSRF, DoS, cache poisoning, open redirect
+- Uploads dans uploads/ sans « site compromise »
+- PHP Object Injection sans gadget exploitable
+- Tout PR:H (admin/editor/shop manager/unfiltered_html)
+- Tout mid-level (Contributor/Author)
 
-## ✅ FINDINGS RETENUS (2 — après application v3)
+## ✅ BILAN DES FINDINGS EXISTANTS vs v4
+| Finding | Verdict v4 |
+|---|---|
+| UR mail logs | ❌ OUT (uploads dir sans site compromise + .htaccess) |
+| UM IP ban bypass | ❌ OUT probable (IP Spoofing = False Positive) |
+| DM direct file access | ❌ REJETÉ (confirmé) |
+| NF export CSV | ❌ OUT (même pattern) |
+| WPvivid SSRF | ❌ OUT (SSRF explicite) |
+| WPFM RCE admin | ❌ OUT (PR:H) |
 
-### 1. User Registration ≤ 5.2.8 — mail logs (CWE-538, Unauth) ⚠️ RISQUE DE REJET
-Pattern .htaccess-nginx → probablement rejeté sur la même base. Peut-être soutenable si argumenté différemment (le log contient des PII par DÉFAUT sans action admin — contrairement à DM où l'admin a choisi de mettre des fichiers). À toi de décider si tu soumets ou non.
+**Aucun finding actuel n'est soumettable Wordfence sous la grille v4.** Les 6 rapports restent valides pour Patchstack/WPScan (grilles différentes).
 
-### 2. Ultimate Member ≤ 2.14.0 — IP Ban Bypass X-Forwarded-For (CWE-348, Unauth) ✅ SOLIDE
-Ce finding N'EST PAS touché par la règle du rejet : le contournement (um_user_ip() lit les headers client avant REMOTE_ADDR) est purement applicatif, aucun facteur serveur. C'est notre meilleur candidat.
+## 🆕 CHASSE v4 — angles applicatifs purs sur les 10 plugins
+1. **Arbitrary Options Update** : chercher update_option() reachable par Subscriber (settings non protégées)
+2. **Priv Esc via rôle** : formulaires d'inscription publics avec champ role exploitable (attention : injection de role déjà testée UR — résistée — à étendre aux 9 autres)
+3. **Stored XSS applicatif** : données utilisateur rendues dans du HTML côté serveur (pas React/JS) chez Fluent/NF/DM
+4. **PHP File Read** : file_get_contents/readfile avec paramètre contrôlable Subscriber (pas admin)
+5. **PHP Object Injection avec gadget** : unserialize() sur données contrôlables + classes du plugin en gadget (pas seulement allowed_classes=false)
+6. **Auth Bypass** : flux de login custom (DM Login.php — déjà vu durci, mais re-vérifier les variantes)
 
-## ❌ RÉTROGRADÉS (pattern rejeté — .htaccess/nginx)
-- DM direct file access (#3) — REJETÉ par Wordfence (confirmé)
-- NF export CSV (#4) — même pattern, ne pas soumettre
-- (UR mail logs = borderline, même famille)
-
-## 🎯 STRATÉGIE v3 POUR LA SUITE DES RECHERCHES
-Ne chasser QUE des failles **100% applicatives** (aucune dépendance serveur) :
-1. Auth bypass applicatif (login/nonce/token logic)
-2. Priv esc par injection de rôle/cap dans les flux applicatifs
-3. SQLi (toujours applicatif)
-4. XSS stocké rendu par le plugin (pas dépendant du serveur)
-5. IDOR entre utilisateurs (accès aux données d'autrui via handlers applicatifs)
-
-Le pattern « où sont les données physiquement » est MORTE comme catégorie Wordfence — garder les 3 rapports pour un éventuel dépôt Patchstack/WPScan à la place (ils publient ce type de findings, ex. les 76 vulns DM déjà chez Patchstack).
+## ⚙️ ENVIRONNEMENTS
+wp1 multisite port 80 · wp2 single-site port 8082 (admin/adminPass123!, round 2 actifs)
 
 ## 📤 LIVRAISON
-Branche vibe/dynamic-audit-findings — le finding UM IP ban = priorité soumission ; les 3 pattern-htaccess peuvent partir chez Patchstack/WPScan
+Branche vibe/dynamic-audit-findings — 6 rapports (tous redirigés Patchstack/WPScan) + PoC + vidéos + env
